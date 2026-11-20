@@ -113,6 +113,26 @@ li.is-done .ex-n,li.is-done .ex-rx{opacity:.55}
 details.tip summary{font-size:12px;color:var(--accent);cursor:pointer;width:max-content}
 details.tip p{margin:4px 0 0;font-size:13px;color:var(--ink2)}
 .rest-act{padding:10px 0 2px}
+/* meals */
+.meals{margin-top:4px}
+.meal{border-top:1px solid var(--line);padding:9px 0 7px}
+.meal:first-child{border-top:0}
+.meal-h{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.meal-h b{white-space:nowrap}
+.meal-h .mp{font-size:12px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.meal-h .mk{font-size:12.5px;color:var(--ink2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.reroll{flex:none;border:1px solid var(--line);background:var(--card);border-radius:8px;width:36px;height:32px;cursor:pointer;color:var(--accent);font-size:17px;line-height:1}
+.reroll:active{background:var(--accent-wash)}
+ul.foods{list-style:none;margin:4px 0 0;padding:0}
+ul.foods li{display:flex;justify-content:space-between;gap:10px;font-size:14px;padding:2px 0 2px 2px}
+ul.foods li::before{content:"・";color:var(--muted);margin-right:-6px}
+ul.foods li span:first-child{flex:1}
+ul.foods .amt{color:var(--ink2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.mtot{margin:6px 0 0;padding-top:8px;border-top:1px solid var(--line)}
+details.mealbox{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+details.mealbox>summary{cursor:pointer;color:var(--accent);font-size:14px;font-weight:600}
+.dows.ng{grid-template-columns:repeat(5,1fr)}
+.dows.ng span{font-weight:500;font-size:13.5px}
 .rest-act b{display:block}
 /* week nav */
 .wnav{display:flex;gap:8px;align-items:center;margin:0 0 10px}

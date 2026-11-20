@@ -1,5 +1,5 @@
 // 筋トレ計画 service worker: オフラインでも開ける。更新が反映されるようにネットワーク優先
-const CACHE = 'kintore-v1';
+const CACHE = 'kintore-v2';
 const ASSETS = ['./', './index.html', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {

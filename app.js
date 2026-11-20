@@ -348,6 +348,175 @@ function simulate(p) {
 }
 const monthsText = w => w < 6 ? `約${w}週間` : `約${Math.round(w / WPM * 2) / 2}か月`;
 
+/* ---------- meals ---------- */
+// k/p/f/c: 1単位あたり（u==='g' は100gあたり）の kcal・たんぱく質・脂質・炭水化物（日本食品標準成分表などをもとにした概算）
+// a:[最小,最大,刻み] b:基本量 s:h=自炊 c=コンビニ b=どちらも t:除外タグ
+const FOOD = {
+  rice: { n: 'ご飯', u: 'g', k: 156, p: 2.5, f: 0.3, c: 37.1, a: [100, 350, 10], b: 150, s: 'b' },
+  genmai: { n: '玄米ご飯', u: 'g', k: 152, p: 2.8, f: 1.0, c: 35.6, a: [100, 350, 10], b: 150, s: 'h' },
+  bread: { n: '食パン（6枚切り）', u: '枚', k: 149, p: 5.3, f: 2.5, c: 27.8, a: [1, 2, 1], b: 1, s: 'b', t: ['wheat'] },
+  oat: { n: 'オートミール', u: 'g', k: 350, p: 13.7, f: 5.7, c: 69.1, a: [30, 80, 10], b: 40, s: 'h' },
+  onigiri: { n: 'おにぎり（鮭・梅など）', u: '個', k: 175, p: 4.5, f: 1.5, c: 36, a: [1, 3, 1], b: 2, s: 'c' },
+  udon: { n: 'うどん（ゆで）', u: '玉', k: 190, p: 5.2, f: 0.8, c: 43.2, a: [1, 2, 0.5], b: 1, s: 'b', t: ['wheat'] },
+  soba: { n: 'そば（ゆで）', u: '玉', k: 221, p: 8.2, f: 1.7, c: 44.2, a: [1, 2, 0.5], b: 1, s: 'b', t: ['wheat'] },
+  pasta: { n: 'パスタ（乾麺）', u: 'g', k: 347, p: 12.9, f: 1.8, c: 73.1, a: [60, 160, 10], b: 80, s: 'h', t: ['wheat'] },
+  imo: { n: 'さつまいも（蒸し）', u: 'g', k: 131, p: 1.2, f: 0.2, c: 31.9, a: [100, 300, 50], b: 100, s: 'b' },
+  mune: { n: '鶏むね肉のソテー（皮なし）', u: 'g', k: 135, p: 23.3, f: 4.9, c: 1, a: [80, 200, 20], b: 120, s: 'h' },
+  sasami: { n: '鶏ささみのポン酢がけ', u: 'g', k: 105, p: 23.9, f: 0.8, c: 2, a: [80, 200, 20], b: 100, s: 'h' },
+  schicken: { n: 'サラダチキン', u: '個', k: 116, p: 24.2, f: 1.4, c: 0.3, a: [0.5, 2, 0.5], b: 1, s: 'c' },
+  salmon: { n: '鮭の塩焼き', u: '切れ', k: 146, p: 17.9, f: 8.9, c: 0.1, a: [1, 2, 1], b: 1, s: 'h', t: ['fish'] },
+  saba: { n: 'さばの塩焼き', u: '切れ', k: 210, p: 21, f: 15.3, c: 0.1, a: [1, 1, 1], b: 1, s: 'h', t: ['fish'] },
+  shoga: { n: '豚の生姜焼き（もも肉）', u: 'g', k: 220, p: 20.8, f: 12, c: 6, a: [80, 160, 20], b: 100, s: 'h' },
+  teri: { n: '鶏ももの照り焼き（皮なし）', u: 'g', k: 165, p: 19.2, f: 8, c: 6, a: [80, 180, 20], b: 120, s: 'h' },
+  beef: { n: '牛もも肉の焼肉', u: 'g', k: 190, p: 21.5, f: 10.7, c: 4, a: [80, 160, 20], b: 100, s: 'h' },
+  maguro: { n: 'まぐろ赤身の刺身', u: 'g', k: 120, p: 26.6, f: 1.4, c: 1.6, a: [60, 150, 10], b: 80, s: 'b', t: ['fish'] },
+  tuna: { n: 'ツナ缶（水煮）', u: '缶', k: 49, p: 11.3, f: 0.5, c: 0.1, a: [1, 2, 1], b: 1, s: 'b', t: ['fish'] },
+  sabacan: { n: 'さば缶（水煮）', u: '缶', k: 330, p: 39.8, f: 20.2, c: 0.4, a: [0.5, 1, 0.5], b: 0.5, s: 'b', t: ['fish'] },
+  tofu: { n: '冷ややっこ（木綿豆腐）', u: 'g', k: 76, p: 7.3, f: 4.9, c: 2.3, a: [100, 200, 50], b: 150, s: 'b', t: ['soy'] },
+  natto: { n: '納豆', u: 'パック', k: 96, p: 7.7, f: 4.5, c: 7.5, a: [1, 2, 1], b: 1, s: 'b', t: ['soy'] },
+  egg: { n: 'ゆで卵', u: '個', k: 71, p: 6.1, f: 5.1, c: 0.2, a: [1, 3, 1], b: 1, s: 'b', t: ['egg'] },
+  fegg: { n: '目玉焼き', u: '個', k: 89, p: 6.1, f: 7.1, c: 0.2, a: [1, 2, 1], b: 1, s: 'h', t: ['egg'] },
+  yakitori: { n: '焼き鳥（塩・2本）', u: '皿', k: 150, p: 16, f: 8, c: 3, a: [1, 2, 1], b: 1, s: 'c' },
+  greek: { n: 'ギリシャヨーグルト（プレーン）', u: '個', k: 90, p: 10, f: 0.3, c: 12, a: [1, 2, 1], b: 1, s: 'b', t: ['milk'] },
+  yogurt: { n: 'プレーンヨーグルト（無糖）', u: 'g', k: 56, p: 3.6, f: 3.0, c: 4.9, a: [100, 200, 50], b: 100, s: 'b', t: ['milk'] },
+  milk: { n: '低脂肪乳（200ml）', u: '杯', k: 87, p: 7.8, f: 2.1, c: 11.3, a: [1, 2, 1], b: 1, s: 'b', t: ['milk'] },
+  soymilk: { n: '無調整豆乳（200ml）', u: '杯', k: 92, p: 7.6, f: 4.2, c: 6.5, a: [1, 1, 1], b: 1, s: 'b', t: ['soy'] },
+  protein: { n: 'プロテイン（水割り）', u: '杯', k: 115, p: 21, f: 1.5, c: 3.5, a: [1, 1, 1], b: 1, s: 'b', t: ['milk'], pro: true },
+  edamame: { n: '枝豆（さやを除いた量）', u: 'g', k: 125, p: 11.7, f: 6.2, c: 8.8, a: [50, 100, 50], b: 50, s: 'b', t: ['soy'] },
+  cheese: { n: 'プロセスチーズ', u: '個', k: 56, p: 4.1, f: 4.7, c: 0.2, a: [1, 2, 1], b: 1, s: 'b', t: ['milk'] },
+  pbar: { n: 'プロテインバー', u: '本', k: 200, p: 15, f: 9, c: 15, a: [1, 1, 1], b: 1, s: 'c', t: ['milk', 'soy'] },
+  nuts: { n: '素焼きミックスナッツ（20g）', u: '袋', k: 121, p: 4, f: 10.8, c: 3, a: [1, 2, 1], b: 1, s: 'b' },
+  salad: { n: 'グリーンサラダ（ノンオイルドレッシング）', u: '皿', k: 40, p: 1.2, f: 0.2, c: 8, a: [1, 1, 1], b: 1, s: 'b' },
+  csalad: { n: 'カップサラダ（ドレッシング付き）', u: '個', k: 70, p: 2, f: 4, c: 7, a: [1, 1, 1], b: 1, s: 'c' },
+  broc: { n: 'ゆでブロッコリー（ポン酢）', u: '皿', k: 28, p: 3.3, f: 0.3, c: 4.4, a: [1, 1, 1], b: 1, s: 'h' },
+  spin: { n: 'ほうれん草のおひたし', u: '皿', k: 20, p: 2, f: 0.3, c: 3, a: [1, 1, 1], b: 1, s: 'h' },
+  yasai: { n: '野菜炒め', u: '皿', k: 90, p: 2.5, f: 4.5, c: 10, a: [1, 1, 1], b: 1, s: 'h' },
+  kinpira: { n: 'きんぴらごぼう', u: '皿', k: 80, p: 1.5, f: 3.5, c: 10, a: [1, 1, 1], b: 1, s: 'b' },
+  hijiki: { n: 'ひじきの煮物', u: '皿', k: 70, p: 3, f: 3, c: 8, a: [1, 1, 1], b: 1, s: 'b', t: ['soy'] },
+  tomato: { n: 'ミニトマト（5個）', u: '皿', k: 15, p: 0.6, f: 0.1, c: 3.6, a: [1, 1, 1], b: 1, s: 'b' },
+  kinoko: { n: 'きのこのソテー', u: '皿', k: 45, p: 2, f: 3, c: 4, a: [1, 1, 1], b: 1, s: 'h' },
+  miso: { n: 'わかめと豆腐の味噌汁', u: '杯', k: 45, p: 3.5, f: 1.8, c: 4.5, a: [1, 1, 1], b: 1, s: 'b', t: ['soy'] },
+  imiso: { n: 'インスタント味噌汁', u: '杯', k: 30, p: 2, f: 1, c: 4, a: [1, 1, 1], b: 1, s: 'c', t: ['soy'] },
+  tonjiru: { n: '具だくさん豚汁', u: '杯', k: 120, p: 7, f: 6, c: 9, a: [1, 1, 1], b: 1, s: 'b', t: ['soy'] },
+  soup: { n: '野菜スープ（コンソメ）', u: '杯', k: 35, p: 1.2, f: 0.5, c: 6.5, a: [1, 1, 1], b: 1, s: 'b' },
+  egsoup: { n: 'かき玉スープ', u: '杯', k: 50, p: 3.5, f: 2.5, c: 3.5, a: [1, 1, 1], b: 1, s: 'h', t: ['egg'] },
+  banana: { n: 'バナナ', u: '本', k: 93, p: 1.1, f: 0.2, c: 22.5, a: [1, 1, 1], b: 1, s: 'b' },
+  kiwi: { n: 'キウイ', u: '個', k: 43, p: 0.9, f: 0.2, c: 11, a: [1, 1, 1], b: 1, s: 'b' },
+  mikan: { n: 'みかん', u: '個', k: 39, p: 0.6, f: 0.1, c: 9.6, a: [1, 2, 1], b: 1, s: 'b' },
+  apple: { n: 'りんご（1/2個）', u: '皿', k: 66, p: 0.1, f: 0.3, c: 19, a: [1, 1, 1], b: 1, s: 'b' }
+};
+const NG = { egg: '卵', milk: '乳製品', fish: '魚介', soy: '大豆', wheat: '小麦' };
+const MEAL_STYLE = { home: '自炊中心', conv: 'コンビニ・外食中心', mix: 'どちらも' };
+// 献立の型。r: [役割, 候補(スペース区切り), 'R'=必須 / 'O'=なくても可]。役割 st 以外は1日の中でなるべく重ならないようにする
+const MEALPAT = [
+  { slot: 'B', n: '和の朝ごはん', s: 'b', r: [['st', 'rice genmai', 'R'], ['mn', 'natto salmon tofu', 'R'], ['mn', 'egg fegg'], ['sp', 'miso soup egsoup'], ['fr', 'mikan kiwi', 'O']] },
+  { slot: 'B', n: 'トーストの朝ごはん', s: 'b', r: [['st', 'bread', 'R'], ['mn', 'fegg egg schicken', 'R'], ['mn', 'greek yogurt'], ['sd', 'tomato salad'], ['fr', 'banana kiwi', 'O']] },
+  { slot: 'B', n: 'オートミールの朝ごはん', s: 'h', r: [['st', 'oat', 'R'], ['mn', 'milk soymilk', 'R'], ['mn', 'egg greek'], ['fr', 'banana kiwi', 'O']] },
+  { slot: 'B', n: 'コンビニの朝ごはん', s: 'c', r: [['st', 'onigiri', 'R'], ['mn', 'schicken egg', 'R'], ['mn', 'greek milk soymilk'], ['fr', 'banana', 'O']] },
+  { slot: 'L', n: 'お弁当・定食', s: 'h', r: [['st', 'rice genmai', 'R'], ['mn', 'mune teri shoga salmon saba sasami', 'R'], ['sd', 'broc spin kinpira hijiki salad'], ['sp', 'miso soup', 'O'], ['mn', 'egg natto', 'O']] },
+  { slot: 'L', n: 'そば・うどんのセット', s: 'b', r: [['st', 'soba udon', 'R'], ['mn', 'egg sasami tofu schicken', 'R'], ['sd', 'salad spin'], ['fr', 'mikan', 'O']] },
+  { slot: 'L', n: '丼ぶり', s: 'b', r: [['st', 'rice', 'R'], ['mn', 'maguro teri beef', 'R'], ['sd', 'salad kinpira'], ['sp', 'miso', 'O']] },
+  { slot: 'L', n: 'パスタランチ', s: 'h', r: [['st', 'pasta', 'R'], ['mn', 'tuna mune', 'R'], ['sd', 'salad broc'], ['sp', 'soup', 'O']] },
+  { slot: 'L', n: 'コンビニランチ', s: 'c', r: [['st', 'onigiri', 'R'], ['mn', 'schicken yakitori', 'R'], ['mn', 'egg tofu', 'O'], ['sd', 'csalad'], ['sp', 'imiso soup', 'O']] },
+  { slot: 'D', n: '和定食', s: 'h', r: [['st', 'rice genmai', 'R'], ['mn', 'salmon saba mune shoga teri beef maguro', 'R'], ['sd', 'broc spin yasai kinpira hijiki kinoko'], ['sp', 'miso tonjiru soup egsoup', 'O'], ['mn', 'tofu natto', 'O']] },
+  { slot: 'D', n: '洋風の夕食', s: 'h', r: [['st', 'rice pasta', 'R'], ['mn', 'mune teri beef', 'R'], ['sd', 'salad broc kinoko'], ['sp', 'soup egsoup', 'O'], ['mn', 'egg tofu', 'O']] },
+  { slot: 'D', n: 'コンビニ・お惣菜の夕食', s: 'c', r: [['st', 'rice onigiri', 'R'], ['mn', 'schicken yakitori sabacan', 'R'], ['mn', 'tofu natto egg', 'O'], ['sd', 'csalad hijiki kinpira'], ['sp', 'imiso tonjiru', 'O']] },
+  { slot: 'S', n: '間食', s: 'b', r: [['mn', 'greek protein schicken egg soymilk pbar', 'O'], ['mn', 'yogurt edamame cheese', 'O'], ['fr', 'banana kiwi mikan apple', 'O'], ['st', 'onigiri imo', 'O'], ['x', 'nuts', 'O']] },
+  { slot: '*', n: 'シンプルな食事', s: 'b', r: [['st', 'rice', 'R'], ['mn', 'maguro tofu natto egg schicken mune sasami', 'R'], ['sd', 'salad tomato'], ['fr', 'banana', 'O']] }
+];
+const MEAL_SLOTS = [
+  { id: 'B', n: '朝食', k: 0.25, p: 0.25 },
+  { id: 'L', n: '昼食', k: 0.35, p: 0.3 },
+  { id: 'D', n: '夕食', k: 0.30, p: 0.3 },
+  { id: 'S', n: '間食', k: 0.10, p: 0.15 }
+];
+const K_MSEED = 'kintore.mealSeed';
+function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function rng(seed) { let a = seed; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const fmul = (f, a) => (f.u === 'g' ? a / 100 : a);
+function amtLabel(f, a) {
+  if (f.u === 'g') return `${a}g`;
+  const s = a === 0.5 ? '1/2' : a === 1.5 ? '1と1/2' : String(a);
+  return s + f.u;
+}
+function foodOk(p, id) {
+  const f = FOOD[id];
+  if (!f) return false;
+  if (f.pro && !p.protein) return false;
+  if ((f.t || []).some(t => (p.ng || []).includes(t))) return false;
+  const st = p.meal || 'mix';
+  return f.s === 'b' || st === 'mix' || (st === 'home' && f.s === 'h') || (st === 'conv' && f.s === 'c');
+}
+function patOk(p, pt) { const st = p.meal || 'mix'; return pt.s === 'b' || st === 'mix' || (st === 'home' && pt.s === 'h') || (st === 'conv' && pt.s === 'c'); }
+// 候補の量をすべて試して、kcal・たんぱく質・脂質の目標に一番近い組み合わせを選ぶ
+function solveMeal(chosen, tgt) {
+  const opts = chosen.map(c => { const [mn, mx, st] = c.f.a, o = []; for (let a = mn; a <= mx + 1e-9; a += st) o.push(Math.round(a * 10) / 10); return c.opt ? [0, ...o] : o; });
+  const sq = x => x * x, n = chosen.length, idx = new Array(n).fill(0);
+  let best = null, bestE = Infinity;
+  const rec = (i, K, P, F, pen) => {
+    if (i === n) {
+      const e = sq((K - tgt.k) / Math.max(tgt.k, 150)) + 1.0 * sq((P - tgt.p) / Math.max(tgt.p, 8)) + 0.15 * sq((F - tgt.f) / Math.max(tgt.f, 8)) + pen;
+      if (e < bestE) { bestE = e; best = idx.slice(); }
+      return;
+    }
+    const c = chosen[i], f = c.f, range = f.a[1] - f.a[0];
+    for (let j = 0; j < opts[i].length; j++) {
+      const a = opts[i][j], m = fmul(f, a);
+      idx[i] = j;
+      const pn = (range > 0 && a > 0 ? 0.004 * sq((a - f.b) / range) : 0) + (a === 0 ? 0.004 : 0);
+      rec(i + 1, K + f.k * m, P + f.p * m, F + f.f * m, pen + pn);
+    }
+  };
+  rec(0, 0, 0, 0, 0);
+  return chosen.map((c, i) => ({ id: c.id, a: opts[i][best[i]] })).filter(x => x.a > 0);
+}
+function mealPlan(p, d) {
+  const seeds = LS.get(K_MSEED, {}), used = new Set(), meals = [];
+  let K = 0, P = 0, F = 0, C = 0;
+  for (let si = 0; si < MEAL_SLOTS.length; si++) {
+    const sl = MEAL_SLOTS[si];
+    let tgt;
+    if (sl.id === 'S') {
+      tgt = { k: d.kcal - K, p: Math.max(0, d.P - P), f: Math.max(0, d.F - F) };
+      if (tgt.k < 60) { meals.push({ slot: sl, none: true }); continue; }
+    } else {
+      // 残りの量を、残りの食事の割合で分ける（前の食事のずれを後の食事で吸収する）
+      const rest = MEAL_SLOTS.slice(si), rk = rest.reduce((s, x) => s + x.k, 0), rp = rest.reduce((s, x) => s + x.p, 0);
+      tgt = { k: Math.max(0, d.kcal - K) * sl.k / rk, p: Math.max(0, d.P - P) * sl.p / rp, f: Math.max(0, d.F - F) * sl.k / rk };
+    }
+    const r = rng(hashStr(`${d.date}|${sl.id}|${seeds[`${d.date}|${sl.id}`] || 0}`));
+    const pats = MEALPAT.filter(pt => pt.slot === sl.id && patOk(p, pt)).map(pt => [r(), pt]).sort((a, b) => a[0] - b[0]).map(x => x[1]);
+    if (sl.id !== 'S') pats.push(MEALPAT.find(pt => pt.slot === '*'));
+    let chosen = null, pat = null;
+    for (const pt of pats) {
+      const ch = [], here = new Set();
+      let ok = true;
+      for (const [role, ids, flag] of pt.r) {
+        const cands = ids.split(' ').filter(id => foodOk(p, id) && !here.has(id));
+        if (!cands.length) { if (flag === 'R') { ok = false; break; } continue; }
+        const fresh = role === 'st' ? cands : cands.filter(id => !used.has(id));
+        const pool = fresh.length ? fresh : cands;
+        const id = pool[Math.floor(r() * pool.length)];
+        here.add(id);
+        ch.push({ id, f: FOOD[id], opt: flag === 'O' });
+      }
+      if (ok && ch.length) { chosen = ch; pat = pt; break; }
+    }
+    if (!chosen) { meals.push({ slot: sl, fail: true }); continue; }
+    const items = solveMeal(chosen, tgt);
+    if (!items.length) { meals.push({ slot: sl, none: true }); continue; }
+    const m = { slot: sl, pat, items, k: 0, p: 0, f: 0, c: 0 };
+    for (const it of items) {
+      const f = FOOD[it.id], x = fmul(f, it.a);
+      m.k += f.k * x; m.p += f.p * x; m.f += f.f * x; m.c += f.c * x;
+      if (pat.r.find(rr => rr[0] !== 'st' && rr[1].split(' ').includes(it.id))) used.add(it.id);
+    }
+    K += m.k; P += m.p; F += m.f; C += m.c;
+    meals.push(m);
+  }
+  return { meals, K, P, F, C };
+}
+
 /* ---------- state ---------- */
 const S = { p: null, sim: null, view: 'today', week: 0 };
 function weekOfToday() {
@@ -364,6 +533,27 @@ function weekNote(w) {
   if (w.wb === 0 && w.block > 0 && S.p.dumbbell) extra.push('ダンベルの重さを前のブロックより少しアップ');
   if (w.i > 1 && (w.i - 1) % 8 === 0) extra.push('自重種目がレベルアップ');
   return t + (extra.length ? '。' + extra.join('、') : '');
+}
+
+/* ---------- rendering: meals ---------- */
+const MEAL_TIP = {
+  cut: '減量中のコツ：野菜や汁物から食べ始めると満腹感が出やすくなります。揚げ物・甘い飲み物は控えめに。',
+  bulk: '増量中のコツ：一度に食べきれない分は間食に回してOK。炭水化物は筋トレの前後に多めに。',
+  keep: '維持のコツ：週1〜2回体重を測り、増えてきたらご飯を少し減らして調整しましょう。'
+};
+function mealsHTML(d) {
+  const mp = mealPlan(S.p, d);
+  const rows = mp.meals.map(m => {
+    const label = m.slot.id === 'S' && d.type === 'train' ? '間食（筋トレの後に）' : m.slot.n;
+    if (m.none) return m.slot.id === 'S' ? '' : `<div class="meal"><div class="meal-h"><b>${label}</b></div><p class="tiny" style="margin:2px 0 0">この日は3食で目安に届いています。</p></div>`;
+    if (m.fail) return `<div class="meal"><div class="meal-h"><b>${label}</b></div><p class="tiny" style="margin:2px 0 0">条件に合う例が見つかりませんでした。プロフィールの「食べられないもの」を見直してください。</p></div>`;
+    const key = `${d.date}|${m.slot.id}`;
+    return `<div class="meal"><div class="meal-h"><b>${label}</b><span class="mp">${esc(m.pat.n)}</span><span class="sp"></span><span class="mk">${num(m.k)}kcal・P${Math.round(m.p)}g</span><button class="reroll" data-reroll="${esc(key)}" aria-label="${esc(label)}の別の案" title="別の案">↻</button></div>
+      <ul class="foods">${m.items.map(it => { const f = FOOD[it.id]; return `<li><span>${esc(f.n)}</span><span class="amt">${amtLabel(f, it.a)}</span></li>`; }).join('')}</ul></div>`;
+  }).join('');
+  const diff = Math.round(mp.K - d.kcal);
+  return `<div class="meals">${rows}</div>
+    <p class="tiny mtot">合計 <b>${num(mp.K)}kcal</b>（目安との差 ${diff >= 0 ? '+' : '−'}${num(Math.abs(diff))}）・たんぱく質 ${Math.round(mp.P)}g・脂質 ${Math.round(mp.F)}g・炭水化物 ${Math.round(mp.C)}g</p>`;
 }
 
 /* ---------- rendering: day ---------- */
@@ -405,7 +595,8 @@ function dayCard(d, opts = {}) {
     <div class="day-t"><b>${esc(d.name)}${isToday ? '<span class="tag-today">今日</span>' : ''}</b><span>${d.type === 'train' ? esc(d.focus) : esc(d.act)}</span>${doneN && doneN === total ? '<span class="done-n">✓ 完了</span>' : doneN ? `<span class="done-n">${doneN}/${total} 完了</span>` : ''}</div>
     <div class="day-k"><b>${num(d.kcal)}</b><span>kcal</span></div>`;
   if (opts.flat) return `<article class="day ${isToday ? 'today' : ''}"><div class="day-h" style="cursor:default">${head}</div><div class="day-body">${pfc}${body}</div></article>`;
-  return `<details class="day ${isToday ? 'today' : ''}" ${opts.open ? 'open' : ''}><summary class="day-h">${head}<span class="chev" aria-hidden="true">›</span></summary><div class="day-body">${pfc}${body}</div></details>`;
+  const meals = `<details class="mealbox"><summary>🍽 この日の食事の例</summary>${mealsHTML(d)}</details>`;
+  return `<details class="day ${isToday ? 'today' : ''}" ${opts.open ? 'open' : ''}><summary class="day-h">${head}<span class="chev" aria-hidden="true">›</span></summary><div class="day-body">${pfc}${body}${meals}</div></details>`;
 }
 
 /* ---------- views ---------- */
@@ -439,7 +630,11 @@ function renderToday() {
         <div class="tile"><div class="l">脂質</div><div class="v">${d.F}<small>g</small></div><div class="s">${num(d.F * 9)}kcal</div></div>
         <div class="tile"><div class="l">炭水化物</div><div class="v">${d.C}<small>g</small></div><div class="s">${num(d.C * 4)}kcal</div></div>
       </div>
-      <p class="tiny" style="margin:10px 0 0">配分の例：朝 ${num(d.kcal * 0.25)} ／ 昼 ${num(d.kcal * 0.35)} ／ 夜 ${num(d.kcal * 0.3)} ／ 間食 ${num(d.kcal * 0.1)} kcal<br>たんぱく質の目安：鶏むね肉100g≈23g、卵1個≈6g、納豆1パック≈8g、ツナ缶1缶≈13g、プロテイン1杯≈20g</p>
+    </div>
+    <div class="card">
+      <div class="row"><h2 style="margin:0">今日の食事の例</h2><span class="sp"></span><span class="tiny">${esc(MEAL_STYLE[S.p.meal || 'mix'])}</span></div>
+      ${mealsHTML(d)}
+      <p class="tiny" style="margin:6px 0 0">${esc(MEAL_TIP[w.phase])}<br>「↻」で別の案に変えられます。ご飯は茶碗1杯≈150g。栄養価は概算です。</p>
     </div>
     ${dayCard(d, { flat: true })}
     <div class="card">
@@ -656,7 +851,7 @@ function drawChart() {
 /* ---------- setup form ---------- */
 function renderSetup() {
   const el = $('#v-setup');
-  const p = S.p || { sex: 'm', age: '', height: '', weight: '', bodyFat: '', activity: 'mid', exp: 'none', goal: 'hoso', customWeight: '', customBF: '', days: [1, 3, 5], dumbbell: false, dbMax: 10, start: ymd(todayDate()) };
+  const p = S.p || { sex: 'm', age: '', height: '', weight: '', bodyFat: '', activity: 'mid', exp: 'none', goal: 'hoso', customWeight: '', customBF: '', days: [1, 3, 5], dumbbell: false, dbMax: 10, start: ymd(todayDate()), meal: 'mix', ng: [], protein: false };
   const radio = (name, val, label, cur) => `<label><input type="radio" name="${name}" value="${val}" ${cur === val ? 'checked' : ''}><span>${label}</span></label>`;
   el.innerHTML = `
     ${S.p ? '' : `<div class="card"><h2>はじめに</h2><p class="small muted" style="margin:0">身長・体重と目指す体型を入れると、何か月で理想の体型になれるかを計算し、1週間ごとの筋トレメニュー（自重・ダンベル）と毎日の摂取カロリーを作ります。データはこの端末の中だけに保存されます。</p></div>`}
@@ -685,6 +880,10 @@ function renderSetup() {
       <div class="f"><span class="lbl">ダンベル</span><div class="seg">${radio('db', 'no', '持っていない（自重のみ）', p.dumbbell ? 'yes' : 'no')}${radio('db', 'yes', '持っている', p.dumbbell ? 'yes' : 'no')}</div></div>
       <div class="f" id="dbBox"><label for="dbMax">ダンベルの最大重量（片手・kg）</label><input type="number" id="dbMax" inputmode="decimal" step="0.5" min="1" max="60" value="${esc(p.dbMax || 10)}"><div class="hint">重さを変えられる可変式ダンベルなら、その最大値を入れてください。</div></div>
       <div class="f"><label for="start">開始日</label><input type="date" id="start" value="${esc(p.start)}"></div>
+      <h2 style="margin-top:18px">食事の好み</h2>
+      <div class="f"><span class="lbl">食事のスタイル</span><div class="seg">${Object.keys(MEAL_STYLE).map(k => radio('meal', k, MEAL_STYLE[k], p.meal || 'mix')).join('')}</div><div class="hint">自炊中心なら定食・パスタなど、コンビニ中心ならおにぎり・サラダチキンなどで食事の例を作ります。</div></div>
+      <div class="f"><span class="lbl">食べられないもの（アレルギー・苦手）</span><div class="dows ng">${Object.keys(NG).map(k => `<label><input type="checkbox" name="ng" value="${k}" ${(p.ng || []).includes(k) ? 'checked' : ''}><span>${NG[k]}</span></label>`).join('')}</div><div class="hint">選んだ食品は食事の例に出てきません。重いアレルギーがある場合は、原材料を必ず自分で確認してください。</div></div>
+      <div class="f"><span class="lbl">プロテイン</span><div class="seg">${radio('pro', 'no', '使わない', p.protein ? 'yes' : 'no')}${radio('pro', 'yes', '使う', p.protein ? 'yes' : 'no')}</div></div>
       <div class="err" id="perr" role="alert"></div>
       <button class="btn" type="submit">${S.p ? 'この内容でプランを作り直す' : 'プランを作成'}</button>
     </form>
@@ -722,7 +921,8 @@ function renderSetup() {
     const np = {
       sex: sexNow(), age: +v('age'), height: +v('height'), weight: +v('weight'), bodyFat: v('bodyFat') ? +v('bodyFat') : null,
       activity: v('activity'), exp: v('exp'), goal: goalSel, customWeight: v('customWeight') ? +v('customWeight') : null, customBF: v('customBF') ? +v('customBF') : null,
-      days: $$('input[name=dow]:checked', f).map(i => +i.value), dumbbell: f.querySelector('input[name=db]:checked').value === 'yes', dbMax: +v('dbMax') || 10, start: v('start') || ymd(todayDate())
+      days: $$('input[name=dow]:checked', f).map(i => +i.value), dumbbell: f.querySelector('input[name=db]:checked').value === 'yes', dbMax: +v('dbMax') || 10, start: v('start') || ymd(todayDate()),
+      meal: f.querySelector('input[name=meal]:checked').value, ng: $$('input[name=ng]:checked', f).map(i => i.value), protein: f.querySelector('input[name=pro]:checked').value === 'yes'
     };
     const errs = [];
     if (!(np.age >= 13 && np.age <= 90)) errs.push('年齢は13〜90で入力してください。');
@@ -765,14 +965,26 @@ document.addEventListener('change', e => {
   if (e.target.checked) done[k] = 1; else delete done[k];
   LS.set(K_DONE, done);
   const li = e.target.closest('li'); if (li) li.classList.toggle('is-done', e.target.checked);
-  // 見出しの完了数だけ更新するため描き直す（開閉状態は保つ）
-  if (S.view === 'week') { const openSet = $$('#v-week details.day').map(d => d.open); const y = window.scrollY; renderWeek(); $$('#v-week details.day').forEach((d, i) => d.open = openSet[i]); window.scrollTo(0, y); }
-  else if (S.view === 'today') { const y = window.scrollY; renderToday(); window.scrollTo(0, y); }
+  // 見出しの完了数を更新するため描き直す（開閉状態とスクロール位置は保つ）
+  rerender();
 });
+function rerender() {
+  if (S.view !== 'week' && S.view !== 'today') return;
+  const root = $('#v-' + S.view), open = $$('details', root).map(d => d.open), y = window.scrollY;
+  (S.view === 'week' ? renderWeek : renderToday)();
+  $$('details', root).forEach((d, i) => { if (i < open.length) d.open = open[i]; });
+  window.scrollTo(0, y);
+}
 document.addEventListener('click', e => {
   const t = e.target.closest('button');
   if (!t) return;
   if (t.dataset.v) { if (t.dataset.v === 'week' && S.sim) S.week = weekOfToday().wi; show(t.dataset.v); window.scrollTo(0, 0); return; }
+  if (t.dataset.reroll) {
+    const seeds = LS.get(K_MSEED, {}), k = t.dataset.reroll;
+    seeds[k] = (seeds[k] || 0) + 1; LS.set(K_MSEED, seeds);
+    rerender();
+    return;
+  }
   if (t.id === 'wPrev') { S.week--; renderWeek(); }
   else if (t.id === 'wNext') { S.week++; renderWeek(); }
   else if (t.id === 'wSave') {
@@ -795,6 +1007,7 @@ let rT; window.addEventListener('resize', () => { clearTimeout(rT); rT = setTime
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.p && S.view === 'today') renderToday(); });
 
 S.p = LS.get(K_PROFILE, null);
+if (S.p) S.p = Object.assign({ meal: 'mix', ng: [], protein: false }, S.p); // 食事の好みがない古いプロフィール向け
 if (S.p) { try { rebuild(); S.week = weekOfToday().wi; } catch (e) { console.error(e); S.p = null; } }
 show(S.p ? 'today' : 'setup');
 
@@ -807,5 +1020,5 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
     $('#installX').onclick = () => { $('#installTip').style.display = 'none'; LS.set(K_TIP, true); };
   }
 })();
-window.KT = { S, simulate, targetOf, bmrOf, estBF, EX, PAT };
+window.KT = { S, simulate, targetOf, bmrOf, estBF, EX, PAT, FOOD, mealPlan };
 })();
